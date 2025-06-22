@@ -42,15 +42,9 @@ Example:
 
 This helps maintain the correct hierarchy (`Production → Database`) instead of something unintended like (`Database → Production`).
 
-### 🔄 Real-Time Updates  
-- Folder structure **updates dynamically** when tags change — no full refresh required.  
-
 ### 🧹 Automatic Cleanup  
 - If a VM loses all tags, it moves back to the default folder.  
 - Empty folders are automatically removed.
-
-### 🚫 Duplicate Prevention  
-- VMs appear in only **one location** based on their tags — avoiding duplication.
 
 ---
 
@@ -61,9 +55,6 @@ This helps maintain the correct hierarchy (`Production → Database`) instead of
 | VM Organization     | Flat list of VMs       | Hierarchical folders via tags    |
 | Folder Naming       | Unstructured           | Uses tag names                   |
 | Tag Consistency     | Inconsistent           | Enforced structure               |
-| Updates             | Manual refresh needed  | Real-time folder updates         |
-| Empty Folder Handling | Manual cleanup       | Auto-removal                     |
-| Duplicates          | Possible               | Prevented                        |
 
 ---
 
