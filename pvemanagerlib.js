@@ -4158,6 +4158,30 @@ Ext.define('PVE.data.ResourceStore', {
 	}
     },
 
+    // Enhanced method to force immediate refresh of resource data
+    forceRefresh: function() {
+	let me = this;
+	if (!me.getIsStopped()) {
+	    // Cancel any pending load task and immediately load new data
+	    if (me.load_task) {
+		me.load_task.cancel();
+	    }
+	    me.load(function() {
+		// Fire a custom event to indicate this was a forced refresh
+		me.fireEvent('forcedrefresh', me);
+		// Resume normal update cycle
+		if (!me.getIsStopped()) {
+		    let interval = me.getInterval();
+		    me.load_task.delay(interval, function() {
+			if (!me.getIsStopped()) {
+			    me.startUpdate(); // Resume normal updates
+			}
+		    });
+		}
+	    });
+	}
+    },
+
     constructor: function(config) {
 	let me = this;
 
@@ -10384,6 +10408,12 @@ Ext.define('PVE.panel.TagEditContainer', {
 	    me.forEachTag(cmp => {
 		cmp.updateFilter(tags);
 	    });
+	    
+	    // Fire global event to notify ResourceTree of tag changes
+	    Ext.GlobalEvents.fireEvent('pveTagsChanged', {
+		tags: tags,
+		component: me
+	    });
 	},
 
 	addTag: function(tag, isNew) {
@@ -16172,9 +16202,65 @@ Ext.define('PVE.tree.ResourceTree', {
             if (!node) {
                 node = rootNode.findChildBy((r) => idMapFn(r.data.id) === idMapFn(id), undefined, true);
             }
-            return node;
-        };
+            return node;        };
 
+	// Enhanced automatic update functionality for better responsiveness
+	let autoUpdateConfig = Proxmox.Utils.getAutoUpdateConfig();
+	let localUpdateState = {
+	    lastChangeTime: 0,
+	};
+
+	// Function to trigger immediate update after tag/folder changes
+	let triggerImmediateUpdate = function() {
+	    if (!autoUpdateConfig.enabled) return;
+	    
+	    localUpdateState.lastChangeTime = Date.now();
+	    // Use the enhanced forceRefresh method for immediate update
+	    if (rstore.forceRefresh) {
+		rstore.forceRefresh();
+	    } else if (!rstore.getIsStopped() && !rstore.isLoading()) {
+		rstore.load();
+	    }
+	};
+
+	// Enhanced update interval management
+	let getUpdateInterval = function() {
+	    if (!autoUpdateConfig.enabled) {
+		return autoUpdateConfig.baseInterval;
+	    }
+	    
+	    let timeSinceLastChange = Date.now() - localUpdateState.lastChangeTime;
+	    if (timeSinceLastChange < autoUpdateConfig.fastUpdateDuration) {
+		return autoUpdateConfig.fastInterval;
+	    }
+	    return autoUpdateConfig.baseInterval;
+	};
+
+	// Override the default update mechanism to use dynamic intervals
+	let originalStartUpdate = rstore.startUpdate;
+	rstore.startUpdate = function() {
+	    let me = this;
+	    me.setIsStopped(false);
+	    
+	    let run_load_task = function() {
+		if (me.getIsStopped()) {
+		    return;
+		}
+
+		if (Proxmox.Utils.authOK()) {
+		    let start = new Date();
+		    me.load(function() {
+			let runtime = new Date() - start;
+			let interval = getUpdateInterval() + runtime * 2;
+			me.load_task.delay(interval, run_load_task);
+		    });
+		} else {
+		    me.load_task.delay(200, run_load_task);
+		}
+	    };
+	    
+	    me.load_task.delay(1, run_load_task);
+	};
 
 
     /**
@@ -16430,7 +16516,46 @@ Ext.define('PVE.tree.ResourceTree', {
 
 	me.getSelectionModel().on('select', (_sm, n) => sp.set(stateid, { value: n.data.id }));
 
+	// Listen for global events that indicate tag/folder changes
+	me.mon(Ext.GlobalEvents, 'pveTagsChanged', triggerImmediateUpdate);
+	me.mon(Ext.GlobalEvents, 'pveFolderChanged', triggerImmediateUpdate);
+	
+	// Monitor API requests that might change tags or folders
+	let originalAPI2Request = Proxmox.Utils.API2Request;
+	Proxmox.Utils.API2Request = function(reqOpts) {
+		let originalSuccess = reqOpts.success;
+		
+		// Check if this API call might affect tags or folders
+		let mayAffectTags = reqOpts.url && (
+		reqOpts.url.includes('/config') ||
+		reqOpts.url.includes('/clone') ||
+		reqOpts.url.includes('/template') ||
+		(reqOpts.params && (
+			reqOpts.params.tags !== undefined ||
+			reqOpts.params.folder !== undefined
+		))
+		);
+		
+		if (mayAffectTags) {
+		reqOpts.success = function(response, opts) {
+			if (originalSuccess) {
+			originalSuccess.call(this, response, opts);
+			}
+			// Trigger immediate update after potential tag/folder changes
+			triggerImmediateUpdate();
+		};
+		}
+		
+		return originalAPI2Request.call(this, reqOpts);
+	};
+
 	rstore.on("load", updateTree);
+	
+	// Configure the store to use our enhanced update mechanism
+	if (rstore.setInterval) {
+	    rstore.setInterval(autoUpdateConfig.baseInterval);
+	}
+	
 	rstore.startUpdate();
 
 	me.mon(Ext.GlobalEvents, 'loadedUiOptions', () => {

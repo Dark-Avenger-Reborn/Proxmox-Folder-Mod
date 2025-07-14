@@ -42,6 +42,30 @@ Example:
 
 This helps maintain the correct hierarchy (`Production → Database`) instead of something unintended like (`Database → Production`).
 
+### 🔄 Enhanced Automatic Updates (New!)
+- **Real-time updates**: No more manual refreshing needed! The folder structure updates automatically when you make changes to VM/container tags.
+- **Smart update intervals**: After a tag change, the system updates every 1 second for 10 seconds, then returns to normal 3-second intervals.
+- **Immediate feedback**: Changes are reflected in the tree view within 1-3 seconds of making them.
+- **API monitoring**: The system automatically detects API calls that modify tags and triggers immediate updates.
+- **Visual feedback**: Subtle visual indicators show when data has been refreshed.
+
+### ⚙️ Configurable Update System
+The automatic update system can be customized through JavaScript:
+
+```javascript
+// Get current configuration
+let config = Proxmox.Utils.getAutoUpdateConfig();
+
+// Customize settings
+Proxmox.Utils.setAutoUpdateConfig({
+    enabled: true,          // Enable/disable enhanced updates
+    baseInterval: 3000,     // Normal update interval (3 seconds)
+    fastInterval: 1000,     // Fast update after changes (1 second)
+    fastUpdateDuration: 10000, // How long to use fast updates (10 seconds)
+    visualFeedback: true    // Enable visual feedback
+});
+```
+
 ### 🧹 Automatic Cleanup  
 - If a VM loses all tags, it moves back to the default folder.  
 - Empty folders are automatically removed.
