@@ -65,7 +65,6 @@ This helps maintain the correct hierarchy (`Production → Database`) instead of
 ```bash
 cp /usr/share/pve-manager/js/pvemanagerlib.js /usr/share/pve-manager/js/pvemanagerlib.js.bak
 cp /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js.bak
-
 ```
 
 ---
@@ -75,6 +74,7 @@ cp /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js /usr/share/javascr
 ```bash
 git clone https://github.com/Dark-Avenger-Reborn/Proxmox-Folder-Mod
 cd Proxmox-Folder-Mod
+
 scp pvemanagerlib.js root@your-proxmox-ip:/usr/share/pve-manager/js/
 scp proxmoxlib.js root@your-proxmox-ip:/usr/share/javascript/proxmox-widget-toolkit/
 
