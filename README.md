@@ -9,7 +9,7 @@
 ## 🔄 **About This Fork**  
 
 This is a maintained and slightly modified version of the original repository created by **Gabriel Adams**.  
-It introduces some fixes and improvements, including instructions for updating `proxmoxlib.js`.
+It introduces some fixes and improvements, including bug fixes that occur when clicking on folders.
 
 Credit and appreciation go to Gabriel for the original concept and implementation.  
 You can find the original project here: [Gabriel’s Repo](https://github.com/gradams42/ProxmoxUpgrades)
@@ -64,48 +64,26 @@ This helps maintain the correct hierarchy (`Production → Database`) instead of
 
 ```bash
 cp /usr/share/pve-manager/js/pvemanagerlib.js /usr/share/pve-manager/js/pvemanagerlib.js.bak
+cp /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js.bak
+
 ```
 
 ---
 
-### Step 2: Replace `pvemanagerlib.js`  
+### Step 2: Replace `pvemanagerlib.js` and `proxmoxlib.js` 
 
 ```bash
-git clone https://github.com/your-username/your-forked-repo.git
-cd your-forked-repo
+git clone https://github.com/Dark-Avenger-Reborn/Proxmox-Folder-Mod
+cd Proxmox-Folder-Mod
 scp pvemanagerlib.js root@your-proxmox-ip:/usr/share/pve-manager/js/
+scp proxmoxlib.js root@your-proxmox-ip:/usr/share/javascript/proxmox-widget-toolkit/
+
 chmod 644 /usr/share/pve-manager/js/pvemanagerlib.js
+chmod 644 /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
 ```
 
 ---
 
-### Step 3: Edit `proxmoxlib.js`  
-
-File location:  
-```bash
-/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
-```
-
-#### 1. **Add the following line at line 979**:  
-```js
-if (!section) return null;
-```
-
-This prevents errors in certain UI rendering cases.
-
-#### 2. **Update the version string at the top of the file**:  
-Change:
-```js
-// v4.3.11-t1747226492
-```
-To:
-```js
-// v4.3.11-t1747226493
-```
-
-This will help bust the frontend cache and load the new JS code.
-
----
 
 ### Step 4: Restart the Proxmox Web Interface  
 
