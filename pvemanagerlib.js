@@ -16212,15 +16212,43 @@ Ext.define('PVE.tree.ResourceTree', {
 
 	// Function to trigger immediate update after tag/folder changes
 	let triggerImmediateUpdate = function() {
-	    if (!autoUpdateConfig.enabled) return;
+	    console.log('triggerImmediateUpdate called'); // Debug log
+	    if (!autoUpdateConfig.enabled) {
+		console.log('Auto update disabled, skipping');
+		return;
+	    }
 	    
 	    localUpdateState.lastChangeTime = Date.now();
-	    // Use the enhanced forceRefresh method for immediate update
-	    if (rstore.forceRefresh) {
+	    console.log('Triggering resource store refresh for tree update');
+	    
+	    // Force refresh the resource store to get updated data
+	    if (rstore && typeof rstore.forceRefresh === 'function') {
 		rstore.forceRefresh();
-	    } else if (!rstore.getIsStopped() && !rstore.isLoading()) {
+	    } else if (rstore && typeof rstore.refresh === 'function') {
+		rstore.refresh();
+	    } else if (rstore && !rstore.getIsStopped() && !rstore.isLoading()) {
 		rstore.load();
+	    } else {
+		console.warn('Unable to refresh resource store');
 	    }
+	    
+	    // Also trigger an immediate tree update to ensure UI responsiveness
+	    setTimeout(function() {
+		if (typeof updateTree === 'function') {
+		    console.log('Directly calling updateTree for immediate UI update');
+		    updateTree();
+		}
+		
+		// Additionally refresh the tree view to ensure visual updates
+		if (me && me.getView && typeof me.getView === 'function') {
+		    try {
+			me.getView().refresh();
+			console.log('Tree view refreshed');
+		    } catch (e) {
+			console.log('Could not refresh tree view:', e.message);
+		    }
+		}
+	    }, 100); // Small delay to let any store operations complete
 	};
 
 	// Enhanced update interval management
@@ -16520,36 +16548,58 @@ Ext.define('PVE.tree.ResourceTree', {
 	me.mon(Ext.GlobalEvents, 'pveTagsChanged', triggerImmediateUpdate);
 	me.mon(Ext.GlobalEvents, 'pveFolderChanged', triggerImmediateUpdate);
 	
-	// Monitor API requests that might change tags or folders
-	let originalAPI2Request = Proxmox.Utils.API2Request;
-	Proxmox.Utils.API2Request = function(reqOpts) {
-		let originalSuccess = reqOpts.success;
-		
-		// Check if this API call might affect tags or folders
-		let mayAffectTags = reqOpts.url && (
-		reqOpts.url.includes('/config') ||
-		reqOpts.url.includes('/clone') ||
-		reqOpts.url.includes('/template') ||
-		(reqOpts.params && (
-			reqOpts.params.tags !== undefined ||
-			reqOpts.params.folder !== undefined
-		))
-		);
-		
-		if (mayAffectTags) {
-		reqOpts.success = function(response, opts) {
-			if (originalSuccess) {
-			originalSuccess.call(this, response, opts);
+	// Set up global API monitoring for tag/folder changes (only once)
+	if (!PVE.tree.ResourceTree._apiMonitoringSetup) {
+		let originalAPI2Request = Proxmox.Utils.API2Request;
+		Proxmox.Utils.API2Request = function(reqOpts) {
+			let originalSuccess = reqOpts.success;
+			
+			// Check if this API call might affect tags or folders
+			let mayAffectTags = reqOpts.url && (
+			reqOpts.url.includes('/config') ||
+			reqOpts.url.includes('/clone') ||
+			reqOpts.url.includes('/template') ||
+			(reqOpts.params && (
+				reqOpts.params.tags !== undefined ||
+				reqOpts.params.folder !== undefined
+			))
+			);
+			
+			if (mayAffectTags) {
+			reqOpts.success = function(response, opts) {
+				if (originalSuccess) {
+				originalSuccess.call(this, response, opts);
+				}
+				// Fire global event for all ResourceTree instances
+				console.log('API call completed that may affect tags/folders, firing global event');
+				Ext.GlobalEvents.fireEvent('pveTagsChanged', {
+					source: 'api_update',
+					url: reqOpts.url
+				});
+			};
 			}
-			// Trigger immediate update after potential tag/folder changes
-			triggerImmediateUpdate();
+			
+			return originalAPI2Request.call(this, reqOpts);
 		};
-		}
 		
-		return originalAPI2Request.call(this, reqOpts);
-	};
+		PVE.tree.ResourceTree._apiMonitoringSetup = true;
+	}
 
 	rstore.on("load", updateTree);
+	
+	// Also listen for individual record updates that might affect tags
+	rstore.on("update", function(store, record, operation) {
+		if (operation === Ext.data.Model.EDIT && record.data && record.data.tags !== undefined) {
+			console.log('ResourceStore record updated with tags, triggering tree update');
+			triggerImmediateUpdate();
+		}
+	});
+	
+	// Listen for datachanged events which can happen when records are modified
+	rstore.on("datachanged", function() {
+		console.log('ResourceStore data changed, updating tree');
+		updateTree();
+	});
 	
 	// Configure the store to use our enhanced update mechanism
 	if (rstore.setInterval) {
