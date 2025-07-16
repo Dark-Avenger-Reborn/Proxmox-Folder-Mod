@@ -16208,6 +16208,7 @@ Ext.define('PVE.tree.ResourceTree', {
 	let autoUpdateConfig = Proxmox.Utils.getAutoUpdateConfig();
 	let localUpdateState = {
 	    lastChangeTime: 0,
+	    isUpdating: false, // Flag to prevent cascading updates
 	};
 
 	// Function to trigger immediate update after tag/folder changes
@@ -16218,14 +16219,22 @@ Ext.define('PVE.tree.ResourceTree', {
 		return;
 	    }
 	    
+	    // Prevent cascading updates
+	    if (localUpdateState.isUpdating) {
+		console.log('Already updating, skipping');
+		return;
+	    }
+	    
 	    // Prevent rapid-fire updates
 	    let now = Date.now();
-	    if (now - localUpdateState.lastChangeTime < 500) {
+	    if (now - localUpdateState.lastChangeTime < 1000) { // Increased to 1 second
 		console.log('Update called too recently, skipping');
 		return;
 	    }
 	    
 	    localUpdateState.lastChangeTime = now;
+	    localUpdateState.isUpdating = true;
+	    
 	    console.log('Triggering resource store refresh for tree update');
 	    
 	    // Force refresh the resource store to get updated data from server
@@ -16242,16 +16251,28 @@ Ext.define('PVE.tree.ResourceTree', {
 			tags: vm.data.tags
 		    })));
 		    rstore.un('load', loadListener); // Remove the listener after use
+		    
+		    // Reset the updating flag after load completes
+		    setTimeout(() => {
+			localUpdateState.isUpdating = false;
+		    }, 500);
 		};
 		rstore.on('load', loadListener);
 		
 		rstore.load(); // This should fetch fresh data from the API
 	    } else if (rstore && typeof rstore.forceRefresh === 'function') {
 		rstore.forceRefresh();
+		setTimeout(() => {
+		    localUpdateState.isUpdating = false;
+		}, 500);
 	    } else if (rstore && typeof rstore.refresh === 'function') {
 		rstore.refresh();
+		setTimeout(() => {
+		    localUpdateState.isUpdating = false;
+		}, 500);
 	    } else {
 		console.warn('Unable to refresh resource store');
+		localUpdateState.isUpdating = false;
 	    }
 	    
 	    // Try to access the main workspace tree directly
@@ -16262,37 +16283,25 @@ Ext.define('PVE.tree.ResourceTree', {
 		    if (workspace) {
 			let mainTree = workspace.down('pveResourceTree');
 			if (mainTree) {
-			    console.log('Found main workspace tree, forcing complete rebuild');
+			    console.log('Found main workspace tree, triggering refresh');
 			    
-			    // Get the tree store and completely reset it
+			    // Don't clear the tree - just trigger a proper update
 			    let treeStore = mainTree.getStore();
 			    if (treeStore) {
-				console.log('Performing complete tree rebuild');
+				console.log('Triggering tree update without clearing');
 				
-				// Clear the tree completely
-				let rootNode = treeStore.getRootNode();
-				if (rootNode) {
-				    // Remove all children
-				    rootNode.removeAll(true);
-				    
-				    // Reset any cached data
-				    if (mainTree.pdata) {
-					mainTree.pdata.dataIndex = {};
-					mainTree.pdata.updateCount = 0;
-				    }
-				    
-				    // Force the tree to rebuild from ResourceStore data
-				    if (rstore && rstore.getData) {
-					// Trigger a complete rebuild by firing the load event
-					rstore.fireEvent('load', rstore, rstore.getData().getRange());
-				    }
-				    
-				    // Also refresh the view
+				// Try to call the tree's updateTree function if it exists
+				if (mainTree.updateTree && typeof mainTree.updateTree === 'function') {
+				    console.log('Calling mainTree.updateTree()');
+				    mainTree.updateTree();
+				} else {
+				    // Fallback: just refresh the view
+				    console.log('No updateTree function, refreshing view');
 				    mainTree.getView().refresh();
-				    
-				    console.log('Main tree rebuild completed');
-				    return; // Exit early if successful
 				}
+				
+				console.log('Main tree update completed');
+				return; // Exit early if successful
 			    }
 			}
 		    }
@@ -16300,15 +16309,15 @@ Ext.define('PVE.tree.ResourceTree', {
 		    console.warn('Error accessing main workspace tree:', e.message);
 		}
 		
-		// Fallback: update all ResourceTree instances
+		// Fallback: update all ResourceTree instances gently
 		let allResourceTrees = Ext.ComponentQuery.query('pveResourceTree');
 		console.log('Fallback: Found', allResourceTrees.length, 'ResourceTree instances');
 		
 		allResourceTrees.forEach(function(tree, index) {
 		    try {
-			console.log('Updating ResourceTree instance', index);
+			console.log('Gently updating ResourceTree instance', index);
 			
-			// Force view refresh
+			// Just refresh the view, don't clear anything
 			if (tree.getView && typeof tree.getView === 'function') {
 			    tree.getView().refresh();
 			}
@@ -16323,7 +16332,7 @@ Ext.define('PVE.tree.ResourceTree', {
 		    console.log('Calling local updateTree as final fallback');
 		    updateTree();
 		}
-	    }, 100); // Small delay to let any store operations complete
+	    }, 200); // Small delay to let any store operations complete
 	};
 
 	// Enhanced update interval management
@@ -16662,18 +16671,20 @@ Ext.define('PVE.tree.ResourceTree', {
 
 	rstore.on("load", updateTree);
 	
-	// Also listen for individual record updates that might affect tags
+	// Listen for individual record updates that might affect tags (but not during our own updates)
 	rstore.on("update", function(store, record, operation) {
-		if (operation === Ext.data.Model.EDIT && record.data && record.data.tags !== undefined) {
+		if (!localUpdateState.isUpdating && operation === Ext.data.Model.EDIT && record.data && record.data.tags !== undefined) {
 			console.log('ResourceStore record updated with tags, triggering tree update');
 			triggerImmediateUpdate();
 		}
 	});
 	
-	// Listen for datachanged events which can happen when records are modified
+	// Listen for datachanged events but only if we're not already updating
 	rstore.on("datachanged", function() {
-		console.log('ResourceStore data changed, updating tree');
-		updateTree();
+		if (!localUpdateState.isUpdating) {
+			console.log('ResourceStore data changed, updating tree');
+			updateTree();
+		}
 	});
 	
 	// Configure the store to use our enhanced update mechanism
