@@ -350,6 +350,23 @@ utilities: {
 	window.localStorage.removeItem("ProxmoxUser");
     },
 
+    // Auto-update configuration management for enhanced folder functionality
+    autoUpdateConfig: {
+	enabled: true,
+	baseInterval: 3000,
+	fastInterval: 1000,
+	fastUpdateDuration: 10000,
+	visualFeedback: true
+    },
+
+    getAutoUpdateConfig: function() {
+	return Ext.clone(Proxmox.Utils.autoUpdateConfig);
+    },
+
+    setAutoUpdateConfig: function(config) {
+	Ext.apply(Proxmox.Utils.autoUpdateConfig, config);
+    },
+
     // The End-User gets redirected back here after login on the OpenID auth. portal, and in the
     // redirection URL the state and auth.code are passed as URL GET params, this helper parses those
     getOpenIDRedirectionAuthorization: function() {
