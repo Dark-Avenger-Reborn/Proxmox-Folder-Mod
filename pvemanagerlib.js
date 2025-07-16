@@ -16218,35 +16218,110 @@ Ext.define('PVE.tree.ResourceTree', {
 		return;
 	    }
 	    
-	    localUpdateState.lastChangeTime = Date.now();
+	    // Prevent rapid-fire updates
+	    let now = Date.now();
+	    if (now - localUpdateState.lastChangeTime < 500) {
+		console.log('Update called too recently, skipping');
+		return;
+	    }
+	    
+	    localUpdateState.lastChangeTime = now;
 	    console.log('Triggering resource store refresh for tree update');
 	    
-	    // Force refresh the resource store to get updated data
-	    if (rstore && typeof rstore.forceRefresh === 'function') {
+	    // Force refresh the resource store to get updated data from server
+	    if (rstore && typeof rstore.load === 'function') {
+		console.log('Forcing ResourceStore to load fresh data from server');
+		
+		// Add a one-time listener to see what data comes back
+		let loadListener = function(store, records) {
+		    console.log('ResourceStore loaded', records.length, 'records');
+		    let vmsWithTags = records.filter(r => r.data.type === 'qemu' || r.data.type === 'lxc');
+		    console.log('VMs/Containers with tags:', vmsWithTags.map(vm => ({
+			id: vm.data.id,
+			name: vm.data.name,
+			tags: vm.data.tags
+		    })));
+		    rstore.un('load', loadListener); // Remove the listener after use
+		};
+		rstore.on('load', loadListener);
+		
+		rstore.load(); // This should fetch fresh data from the API
+	    } else if (rstore && typeof rstore.forceRefresh === 'function') {
 		rstore.forceRefresh();
 	    } else if (rstore && typeof rstore.refresh === 'function') {
 		rstore.refresh();
-	    } else if (rstore && !rstore.getIsStopped() && !rstore.isLoading()) {
-		rstore.load();
 	    } else {
 		console.warn('Unable to refresh resource store');
 	    }
 	    
-	    // Also trigger an immediate tree update to ensure UI responsiveness
+	    // Try to access the main workspace tree directly
 	    setTimeout(function() {
-		if (typeof updateTree === 'function') {
-		    console.log('Directly calling updateTree for immediate UI update');
-		    updateTree();
+		try {
+		    // Look for the main workspace and its tree
+		    let workspace = Ext.ComponentQuery.query('pveStdWorkspace')[0];
+		    if (workspace) {
+			let mainTree = workspace.down('pveResourceTree');
+			if (mainTree) {
+			    console.log('Found main workspace tree, forcing complete rebuild');
+			    
+			    // Get the tree store and completely reset it
+			    let treeStore = mainTree.getStore();
+			    if (treeStore) {
+				console.log('Performing complete tree rebuild');
+				
+				// Clear the tree completely
+				let rootNode = treeStore.getRootNode();
+				if (rootNode) {
+				    // Remove all children
+				    rootNode.removeAll(true);
+				    
+				    // Reset any cached data
+				    if (mainTree.pdata) {
+					mainTree.pdata.dataIndex = {};
+					mainTree.pdata.updateCount = 0;
+				    }
+				    
+				    // Force the tree to rebuild from ResourceStore data
+				    if (rstore && rstore.getData) {
+					// Trigger a complete rebuild by firing the load event
+					rstore.fireEvent('load', rstore, rstore.getData().getRange());
+				    }
+				    
+				    // Also refresh the view
+				    mainTree.getView().refresh();
+				    
+				    console.log('Main tree rebuild completed');
+				    return; // Exit early if successful
+				}
+			    }
+			}
+		    }
+		} catch (e) {
+		    console.warn('Error accessing main workspace tree:', e.message);
 		}
 		
-		// Additionally refresh the tree view to ensure visual updates
-		if (me && me.getView && typeof me.getView === 'function') {
+		// Fallback: update all ResourceTree instances
+		let allResourceTrees = Ext.ComponentQuery.query('pveResourceTree');
+		console.log('Fallback: Found', allResourceTrees.length, 'ResourceTree instances');
+		
+		allResourceTrees.forEach(function(tree, index) {
 		    try {
-			me.getView().refresh();
-			console.log('Tree view refreshed');
+			console.log('Updating ResourceTree instance', index);
+			
+			// Force view refresh
+			if (tree.getView && typeof tree.getView === 'function') {
+			    tree.getView().refresh();
+			}
+			
 		    } catch (e) {
-			console.log('Could not refresh tree view:', e.message);
+			console.warn('Error updating ResourceTree instance', index, ':', e.message);
 		    }
+		});
+		
+		// Local updateTree call as final fallback
+		if (typeof updateTree === 'function') {
+		    console.log('Calling local updateTree as final fallback');
+		    updateTree();
 		}
 	    }, 100); // Small delay to let any store operations complete
 	};
