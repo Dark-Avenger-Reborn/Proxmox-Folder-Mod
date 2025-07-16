@@ -16290,14 +16290,14 @@ Ext.define('PVE.tree.ResourceTree', {
 			    if (treeStore) {
 				console.log('Triggering tree update without clearing');
 				
-				// Try to call the tree's updateTree function if it exists
-				if (mainTree.updateTree && typeof mainTree.updateTree === 'function') {
-				    console.log('Calling mainTree.updateTree()');
-				    mainTree.updateTree();
-				} else {
-				    // Fallback: just refresh the view
-				    console.log('No updateTree function, refreshing view');
-				    mainTree.getView().refresh();
+				// The main tree doesn't have updateTree function, so we need to trigger 
+				// the ResourceStore load event which will call updateTree on all instances
+				console.log('Triggering ResourceStore load event to rebuild tree structure');
+				
+				// Fire the load event on the ResourceStore which should trigger updateTree
+				if (rstore && rstore.getData) {
+				    let records = rstore.getData().getRange();
+				    rstore.fireEvent('load', rstore, records);
 				}
 				
 				console.log('Main tree update completed');
@@ -16380,11 +16380,14 @@ Ext.define('PVE.tree.ResourceTree', {
      * and ensuring correct sorting, filtering, and selection persistence.
      */
     let updateTree = function () {
+        console.log('updateTree function called, starting tree rebuild');
         store.suspendEvents();
 
         let rootnode = me.store.getRootNode();
         let sm = me.getSelectionModel();
         let lastsel = sm.getSelection()[0] || rootnode;
+
+        console.log('Root node children count before update:', rootnode.childNodes.length);
 
         // Store expanded nodes before refreshing the tree
         let expandedNodes = new Set();
@@ -16456,6 +16459,8 @@ Ext.define('PVE.tree.ResourceTree', {
 
         // Step 2: Add new VMs ensuring correct tag hierarchy
         let items = rstore.getData().items.flatMap(me.viewFilter.itemMap ?? Ext.identityFn);
+        console.log('Processing', items.length, 'items from ResourceStore');
+        
         items.forEach(item => {
             let olditem = index[item.data.id];
             if (olditem) {
@@ -16465,10 +16470,15 @@ Ext.define('PVE.tree.ResourceTree', {
                 return;
             }
 
+            console.log('Adding item to tree:', item.data.id, 'with tags:', item.data.tags);
+
             let info = Ext.apply({ leaf: true }, item.data);
             let child = me.groupChild(rootnode, info, groups, 0);
             if (child) {
                 index[item.data.id] = child;
+                console.log('Successfully added', item.data.id, 'to tree');
+            } else {
+                console.log('Failed to add', item.data.id, 'to tree');
             }
         });
 
@@ -16505,6 +16515,9 @@ Ext.define('PVE.tree.ResourceTree', {
         }
 
         pdata.updateCount++;
+        
+        console.log('updateTree completed, root node children count:', rootnode.childNodes.length);
+        console.log('Total items processed from ResourceStore:', rstore.getData().items.length);
     };
 
 	
