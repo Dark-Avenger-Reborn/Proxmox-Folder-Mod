@@ -16283,24 +16283,47 @@ Ext.define('PVE.tree.ResourceTree', {
 		    if (workspace) {
 			let mainTree = workspace.down('pveResourceTree');
 			if (mainTree) {
-			    console.log('Found main workspace tree, triggering refresh');
+			    console.log('Found main workspace tree, triggering aggressive refresh');
 			    
-			    // Don't clear the tree - just trigger a proper update
+			    // Aggressive approach: Clear and rebuild the tree
 			    let treeStore = mainTree.getStore();
-			    if (treeStore) {
-				console.log('Triggering tree update without clearing');
+			    let rootNode = mainTree.getRootNode();
+			    
+			    if (rootNode && treeStore) {
+				console.log('Clearing tree and rebuilding from scratch');
 				
-				// The main tree doesn't have updateTree function, so we need to trigger 
-				// the ResourceStore load event which will call updateTree on all instances
-				console.log('Triggering ResourceStore load event to rebuild tree structure');
+				// First, remove all children from root
+				rootNode.removeAll();
 				
-				// Fire the load event on the ResourceStore which should trigger updateTree
-				if (rstore && rstore.getData) {
-				    let records = rstore.getData().getRange();
-				    rstore.fireEvent('load', rstore, records);
+				// Force immediate view refresh to clear UI
+				if (mainTree.getView && mainTree.getView().refresh) {
+				    mainTree.getView().refresh();
 				}
 				
-				console.log('Main tree update completed');
+				// Rebuild tree structure after short delay
+				setTimeout(function() {
+				    console.log('Rebuilding tree structure with ResourceStore data');
+				    
+				    // Fire the load event on the ResourceStore to rebuild
+				    if (rstore && rstore.getData) {
+					let records = rstore.getData().getRange();
+					rstore.fireEvent('load', rstore, records);
+				    }
+				    
+				    // Force another view refresh after rebuild
+				    setTimeout(function() {
+					if (mainTree.getView && mainTree.getView().refresh) {
+					    console.log('Final view refresh after rebuild');
+					    mainTree.getView().refresh();
+					}
+					// Expand root node to show new structure
+					if (rootNode.expand) {
+					    rootNode.expand();
+					}
+				    }, 300);
+				}, 100);
+				
+				console.log('Main tree aggressive update completed');
 				return; // Exit early if successful
 			    }
 			}
@@ -16697,6 +16720,22 @@ Ext.define('PVE.tree.ResourceTree', {
 		if (!localUpdateState.isUpdating) {
 			console.log('ResourceStore data changed, updating tree');
 			updateTree();
+			
+			// Also force visual refresh of any main workspace tree
+			setTimeout(function() {
+				try {
+					let workspace = Ext.ComponentQuery.query('pveStdWorkspace')[0];
+					if (workspace) {
+						let mainTree = workspace.down('pveResourceTree');
+						if (mainTree && mainTree.getView && mainTree.getView().refresh) {
+							console.log('Forcing visual refresh after datachanged');
+							mainTree.getView().refresh();
+						}
+					}
+				} catch (e) {
+					console.warn('Error forcing visual refresh:', e.message);
+				}
+			}, 100);
 		}
 	});
 	
