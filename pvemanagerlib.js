@@ -16301,12 +16301,8 @@ Ext.define('PVE.tree.ResourceTree', {
         }
 
         // Step 5: Ensure UI refreshes correctly
-		console.log("here")
-        if (!pdata.updateCount) {
-			console.log("there")
-            rootnode.expand();
-            me.applyState(sp.get(stateid));
-        }
+        rootnode.expand();
+        me.applyState(sp.get(stateid));
 
         pdata.updateCount++;
     };
