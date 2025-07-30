@@ -1472,6 +1472,27 @@ Ext.define('PVE.StateProvider', {
 });
 Ext.ns('PVE');
 
+// Add defensive getElementById wrapper to prevent empty string errors
+PVE.safeGetElementById = function(id) {
+    if (!id || id === '') {
+        console.warn('PVE: Empty or null ID passed to getElementById');
+        return null;
+    }
+    return document.getElementById(id);
+};
+
+// Override native getElementById to add defensive checks
+if (typeof document !== 'undefined') {
+    const originalGetElementById = document.getElementById;
+    document.getElementById = function(id) {
+        if (!id || id === '') {
+            console.warn('PVE: Empty string passed to getElementById()');
+            return null;
+        }
+        return originalGetElementById.call(document, id);
+    };
+}
+
 console.log("Starting Proxmox VE Manager");
 
 Ext.Ajax.defaultHeaders = {
@@ -28173,8 +28194,12 @@ Ext.define('PVE.ClusterInfoWindow', {
 	    xtype: 'button',
 	    handler: function(b) {
 		var el = document.getElementById('pveSerializedClusterInfo');
-		el.select();
-		document.execCommand("copy");
+		if (el) {
+		    el.select();
+		    document.execCommand("copy");
+		} else {
+		    console.warn('PVE: Element pveSerializedClusterInfo not found');
+		}
 	    },
 	    text: gettext('Copy Information'),
 	    iconCls: 'fa fa-clipboard',
@@ -32247,8 +32272,13 @@ Ext.define('PVE.dc.TokenShow', {
     buttons: [
 	{
 	    handler: function(b) {
-		document.getElementById('token-secret-value').select();
-		document.execCommand("copy");
+		var el = document.getElementById('token-secret-value');
+		if (el) {
+		    el.select();
+		    document.execCommand("copy");
+		} else {
+		    console.warn('PVE: Element token-secret-value not found');
+		}
 	    },
 	    text: gettext('Copy Secret Value'),
 	    iconCls: 'fa fa-clipboard',
@@ -45355,10 +45385,13 @@ Ext.define('PVE.node.Summary', {
 		    xtype: 'button',
 		    iconCls: 'fa fa-clipboard',
 		    handler: function(button) {
-			window.getSelection().selectAllChildren(
-			    document.getElementById('pkgversions'),
-			);
-			document.execCommand("copy");
+			var el = document.getElementById('pkgversions');
+			if (el) {
+			    window.getSelection().selectAllChildren(el);
+			    document.execCommand("copy");
+			} else {
+			    console.warn('PVE: Element pkgversions not found');
+			}
 		    },
 		    text: gettext('Copy'),
 		},
@@ -59224,8 +59257,13 @@ Ext.define('PVE.Storage.PBSKeyShow', {
 			    cls: 'x-btn-default-toolbar-small proxmox-inline-button',
 			    width: 110,
 			    handler: function(b) {
-				document.getElementById('encryption-key-value').select();
-				document.execCommand("copy");
+				var el = document.getElementById('encryption-key-value');
+				if (el) {
+				    el.select();
+				    document.execCommand("copy");
+				} else {
+				    console.warn('PVE: Element encryption-key-value not found');
+				}
 			    },
 			},
 		    ],
