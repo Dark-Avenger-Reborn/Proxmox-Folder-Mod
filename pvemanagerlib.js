@@ -16182,6 +16182,7 @@ Ext.define('PVE.tree.ResourceTree', {
      * and ensuring correct sorting, filtering, and selection persistence.
      */
     let updateTree = function () {
+	console.log('PVE: updateTree function called - rebuilding folder structure');
         store.suspendEvents();
 
         let rootnode = me.store.getRootNode();

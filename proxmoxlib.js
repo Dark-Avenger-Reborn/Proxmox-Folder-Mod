@@ -512,10 +512,28 @@ utilities: {
 			    // Use the ResourceStore singleton directly
 			    if (PVE && PVE.data && PVE.data.ResourceStore) {
 				console.log('PVE: Found PVE.data.ResourceStore, triggering update');
+				
+				// Add temporary listener to see if load events are firing
+				var tempListener = function() {
+				    console.log('PVE: ResourceStore load event fired!');
+				    PVE.data.ResourceStore.un('load', tempListener);
+				};
+				PVE.data.ResourceStore.on('load', tempListener);
+				
 				Ext.defer(function() {
 				    console.log('PVE: Executing ResourceStore startUpdate');
 				    PVE.data.ResourceStore.startUpdate();
-				}, 100);
+				    
+				    // Try a more forceful reload approach
+				    Ext.defer(function() {
+					console.log('PVE: Trying direct load() call');
+					PVE.data.ResourceStore.load({
+					    callback: function(records, operation, success) {
+						console.log('PVE: Direct load callback - success:', success, 'records:', records ? records.length : 0);
+					    }
+					});
+				    }, 1000);
+				}, 500);
 			    } else {
 				console.log('PVE: PVE.data.ResourceStore not found, trying alternatives...');
 				
