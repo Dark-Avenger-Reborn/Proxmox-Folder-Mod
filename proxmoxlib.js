@@ -499,18 +499,60 @@ utilities: {
 		    // Check if this was a VM/LXC configuration change that might affect folder structure
 		    if (options.method && (options.method === 'PUT' || options.method === 'POST')) {
 			let url = options.url || '';
+			console.log('PVE API Request:', {
+			    url: url,
+			    method: options.method,
+			    timestamp: new Date().toISOString()
+			});
+			
 			// Check if this is a VM or LXC config change that could affect tags/folders
 			if (url.match(/\/api2\/(?:extjs|json)\/nodes\/[^\/]+\/(?:qemu|lxc)\/\d+\/config/)) {
-			    // Find and reload the resource store to update the folder structure
-			    let resourceTrees = Ext.ComponentQuery.query('pveResourceTree');
-			    if (resourceTrees.length > 0) {
-				// Get the resource store from the first available resource tree
-				let rstore = resourceTrees[0].rstore;
-				if (rstore && typeof rstore.load === 'function') {
-				    // Use a small delay to ensure the backend has processed the change
-				    Ext.defer(function() {
-					rstore.load();
-				    }, 100);
+			    console.log('PVE: Configuration change detected for tags/folders:', url);
+			    
+			    // Use the ResourceStore singleton directly
+			    if (PVE && PVE.data && PVE.data.ResourceStore) {
+				console.log('PVE: Found PVE.data.ResourceStore, triggering update');
+				Ext.defer(function() {
+				    console.log('PVE: Executing ResourceStore startUpdate');
+				    PVE.data.ResourceStore.startUpdate();
+				}, 100);
+			    } else {
+				console.log('PVE: PVE.data.ResourceStore not found, trying alternatives...');
+				
+				// Find and reload the resource store to update the folder structure
+				let resourceTrees = Ext.ComponentQuery.query('pveResourceTree');
+				console.log('PVE: Found resource trees:', resourceTrees.length);
+				
+				if (resourceTrees.length > 0) {
+				    console.log('PVE: Processing resource tree components...');
+				    
+				    // Get the resource store from the first available resource tree
+				    let rstore = resourceTrees[0].rstore;
+				    console.log('PVE: Resource store found:', !!rstore);
+				    
+				    if (rstore && typeof rstore.load === 'function') {
+					console.log('PVE: Scheduling resource store reload');
+					// Use a small delay to ensure the backend has processed the change
+					Ext.defer(function() {
+					    console.log('PVE: Executing resource store reload');
+					    rstore.load();
+					}, 100);
+				    }
+				} else {
+				    console.log('PVE: No resource trees found, checking for alternatives...');
+				    
+				    // List all available stores
+				    var allStores = Ext.data.StoreManager.getRange();
+				    console.log('PVE: Available stores:', allStores.map(function(s) { 
+					return { id: s.getId(), storeId: s.storeId }; 
+				    }));
+				    
+				    // Look for resource stores by different methods
+				    var resourceStore = Ext.data.StoreManager.lookup('pveResourceStore');
+				    if (resourceStore) {
+					console.log('PVE: Found resource store by lookup, triggering update');
+					resourceStore.startUpdate();
+				    }
 				}
 			    }
 			}
@@ -12543,14 +12585,52 @@ Ext.define('Proxmox.window.Edit', {
 
 		// Check if tags were modified and refresh resource tree if needed
 		let formValues = me.getValues();
+		console.log('PVE WindowEdit Success:', {
+		    url: me.url,
+		    method: me.method,
+		    formValues: formValues,
+		    hasTagsProperty: formValues.hasOwnProperty('tags'),
+		    timestamp: new Date().toISOString()
+		});
+		
 		if (formValues.hasOwnProperty('tags')) {
-		    // Find and reload the resource store to update the folder structure
-		    let resourceTrees = Ext.ComponentQuery.query('pveResourceTree');
-		    if (resourceTrees.length > 0) {
-			// Get the resource store from the first available resource tree
-			let rstore = resourceTrees[0].rstore;
-			if (rstore && typeof rstore.load === 'function') {
-			    rstore.load();
+		    console.log('PVE: Tags detected in form values, refreshing resource tree');
+		    console.log('PVE: Tags value:', formValues.tags);
+		    
+		    // Use the ResourceStore singleton directly
+		    if (PVE && PVE.data && PVE.data.ResourceStore) {
+			console.log('PVE: Found PVE.data.ResourceStore, triggering update');
+			PVE.data.ResourceStore.startUpdate();
+		    } else {
+			console.log('PVE: PVE.data.ResourceStore not found, trying alternatives...');
+			
+			// Find and reload the resource store to update the folder structure
+			let resourceTrees = Ext.ComponentQuery.query('pveResourceTree');
+			console.log('PVE: Found resource trees:', resourceTrees.length);
+			
+			if (resourceTrees.length > 0) {
+			    console.log('PVE: Processing resource tree components...');
+			    // Get the resource store from the first available resource tree
+			    let rstore = resourceTrees[0].rstore;
+			    console.log('PVE: Resource store found:', !!rstore);
+			    
+			    if (rstore && typeof rstore.load === 'function') {
+				console.log('PVE: Reloading resource store from form success');
+				rstore.load();
+			    } else {
+				console.log('PVE: Resource store not found or invalid');
+			    }
+			} else {
+			    console.log('PVE: No resource trees found in form success handler');
+			    
+			    // Try alternative approach
+			    var resourceStore = Ext.data.StoreManager.lookup('pveResourceStore');
+			    if (resourceStore) {
+				console.log('PVE: Found resource store by lookup, triggering update');
+				resourceStore.startUpdate();
+			    } else {
+				console.log('PVE: Could not find any resource store');
+			    }
 			}
 		    }
 		}
