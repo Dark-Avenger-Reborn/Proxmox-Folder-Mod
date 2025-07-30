@@ -16207,6 +16207,8 @@ Ext.define('PVE.tree.ResourceTree', {
         let attrMoveChecks = me.viewFilter.attrMoveChecks ?? {};
         let moveCheckAttrs = groups.concat(['node', 'template', 'name']);
         let filterFn = me.viewFilter.getFilterFn ? me.viewFilter.getFilterFn() : Ext.identityFn;
+        
+        console.log(`PVE: updateTree groups: ${JSON.stringify(groups)}, moveCheckAttrs: ${JSON.stringify(moveCheckAttrs)}`);
 
         let reselect = false;
         let index = pdata.dataIndex;
@@ -16225,6 +16227,7 @@ Ext.define('PVE.tree.ResourceTree', {
                         moved = true;
                         break;
                     } else if (item.data[attr] !== olditem.data[attr]) {
+                        console.log(`PVE: Detected change in ${attr} for ${oldid}: old="${olditem.data[attr]}" new="${item.data[attr]}"`);
                         moved = true;
                         break;
                     }
@@ -16238,6 +16241,7 @@ Ext.define('PVE.tree.ResourceTree', {
             }
 
             if ((!item || moved) && olditem.isLeaf()) {
+                console.log(`PVE: Removing ${olditem.data.id} from tree - item exists: ${!!item}, moved: ${moved}`);
                 delete index[key];
                 let parentNode = olditem.parentNode;
                 if (lastsel && olditem.data.id === lastsel.data.id) {
@@ -16259,19 +16263,26 @@ Ext.define('PVE.tree.ResourceTree', {
 
         // Step 2: Add new VMs ensuring correct tag hierarchy
         let items = rstore.getData().items.flatMap(me.viewFilter.itemMap ?? Ext.identityFn);
+        console.log(`PVE: Step 2 - Processing ${items.length} items from store`);
         items.forEach(item => {
             let olditem = index[item.data.id];
             if (olditem) {
+                console.log(`PVE: Skipping ${item.data.id} - already exists in index`);
                 return;
             }
             if (filterFn && !filterFn(item)) {
+                console.log(`PVE: Skipping ${item.data.id} - filtered out`);
                 return;
             }
 
+            console.log(`PVE: Adding ${item.data.id} with tags: ${item.data.tags || 'none'}`);
             let info = Ext.apply({ leaf: true }, item.data);
             let child = me.groupChild(rootnode, info, groups, 0);
             if (child) {
                 index[item.data.id] = child;
+                console.log(`PVE: Successfully added ${item.data.id} to tree`);
+            } else {
+                console.log(`PVE: Failed to add ${item.data.id} to tree`);
             }
         });
 
