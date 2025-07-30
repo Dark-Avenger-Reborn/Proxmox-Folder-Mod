@@ -495,6 +495,26 @@ utilities: {
 		    }
 		    Ext.callback(callbackFn, options.scope, [options, true, response]);
 		    Ext.callback(successFn, options.scope, [response, options]);
+		    
+		    // Check if this was a VM/LXC configuration change that might affect folder structure
+		    if (options.method && (options.method === 'PUT' || options.method === 'POST')) {
+			let url = options.url || '';
+			// Check if this is a VM or LXC config change that could affect tags/folders
+			if (url.match(/\/api2\/(?:extjs|json)\/nodes\/[^\/]+\/(?:qemu|lxc)\/\d+\/config/)) {
+			    // Find and reload the resource store to update the folder structure
+			    let resourceTrees = Ext.ComponentQuery.query('pveResourceTree');
+			    if (resourceTrees.length > 0) {
+				// Get the resource store from the first available resource tree
+				let rstore = resourceTrees[0].rstore;
+				if (rstore && typeof rstore.load === 'function') {
+				    // Use a small delay to ensure the backend has processed the change
+				    Ext.defer(function() {
+					rstore.load();
+				    }, 100);
+				}
+			    }
+			}
+		    }
 		},
 		failure: function(response, options) {
 		    if (options.waitMsgTarget) {
@@ -12520,6 +12540,20 @@ Ext.define('Proxmox.window.Edit', {
 		    response.result.data;
 
 		me.apiCallDone(true, response, options);
+
+		// Check if tags were modified and refresh resource tree if needed
+		let formValues = me.getValues();
+		if (formValues.hasOwnProperty('tags')) {
+		    // Find and reload the resource store to update the folder structure
+		    let resourceTrees = Ext.ComponentQuery.query('pveResourceTree');
+		    if (resourceTrees.length > 0) {
+			// Get the resource store from the first available resource tree
+			let rstore = resourceTrees[0].rstore;
+			if (rstore && typeof rstore.load === 'function') {
+			    rstore.load();
+			}
+		    }
+		}
 
 		if (hasProgressBar) {
 		    // only hide to allow delaying our close event until task is done
