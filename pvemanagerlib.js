@@ -16057,22 +16057,26 @@ Ext.define('PVE.tree.ResourceTree', {
 		}
 	
 		let parentNode = node;
+		let parentPath = 'root';
 	
 		for (let tag of tags) {
-			let tagNode = parentNode.findChild('groupbyid', tag);
+			let folderPath = `${parentPath}/${tag}`;
+			let tagNode = parentNode.findChild('folderPath', folderPath);
 	
 			if (!tagNode) {
 				tagNode = me.addChildSorted(parentNode, {
 					type: 'tag-folder',
-					id: `tag/${tag}`,
+					id: `tag/${folderPath}`,
 					text: tag,  // No more numbering, just raw tag name
 					iconCls: 'fa fa-folder',
 					leaf: false,
 					groupbyid: tag,
+					folderPath: folderPath,
 				});
 			}
 	
 			parentNode = tagNode;
+			parentPath = folderPath;
 		}
 	
 		if (!parentNode.findChild('id', info.id)) {
