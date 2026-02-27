@@ -16042,7 +16042,9 @@ Ext.define('PVE.tree.ResourceTree', {
 	let me = this;
 
 	me.setIconCls(info);
-	me.setText(info);
+	if (!info.groupbyid) {
+	    me.setText(info);
+	}
 
 	if (info.groupbyid) {
 	    if (me.viewFilter.groupRenderer) {
@@ -16071,7 +16073,10 @@ Ext.define('PVE.tree.ResourceTree', {
 	// private
 	groupChild: function(node, info, groups, level) {
 		let me = this;
-		let tags = info.tags ? info.tags.split(';') : [];
+		let tags = info.tags
+			? info.tags.split(';').map(tag => tag.trim()).filter(tag => tag.length > 0)
+			: [];
+		tags = tags.filter((tag, idx) => tags.indexOf(tag) === idx);
 	
 		if (!tags.length) {
 			return me.addChildSorted(node, info);
@@ -16080,12 +16085,13 @@ Ext.define('PVE.tree.ResourceTree', {
 		let parentNode = node;
 	
 		for (let tag of tags) {
-			let tagNode = parentNode.findChild('groupbyid', tag);
+			let folderNodeId = `tag/${parentNode.getId()}/${encodeURIComponent(tag)}`;
+			let tagNode = parentNode.findChild('id', folderNodeId);
 	
 			if (!tagNode) {
 				tagNode = me.addChildSorted(parentNode, {
 					type: 'tag-folder',
-					id: `tag/${tag}`,
+					id: folderNodeId,
 					text: tag,  // No more numbering, just raw tag name
 					iconCls: 'fa fa-folder',
 					leaf: false,
