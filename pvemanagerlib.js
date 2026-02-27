@@ -9361,8 +9361,12 @@ Ext.define('PVE.form.ViewSelector', {
 		    return `<span class="proxmox-tags-full">${tag}</span>`;
 		},
 		itemMap: function(item) {
-		    let tags = (item.data.tags ?? '').split(/[;, ]/);
-		    if (tags.length === 1 && tags[0] === '') {
+		    let tags = (item.data.tags ?? '')
+			.split(';')
+			.map(tag => tag.trim())
+			.filter(tag => tag.length > 0);
+		    tags = tags.filter((tag, idx) => tags.indexOf(tag) === idx);
+		    if (tags.length === 0) {
 			return item;
 		    }
 		    let items = [];
@@ -16073,9 +16077,10 @@ Ext.define('PVE.tree.ResourceTree', {
 	// private
 	groupChild: function(node, info, groups, level) {
 		let me = this;
-		let tags = info.tags
-			? info.tags.split(';').map(tag => tag.trim()).filter(tag => tag.length > 0)
-			: [];
+		let tags = Ext.isDefined(info.tag)
+			? [info.tag]
+			: (info.tags ? info.tags.split(';') : []);
+		tags = tags.map(tag => String(tag).trim()).filter(tag => tag.length > 0);
 		tags = tags.filter((tag, idx) => tags.indexOf(tag) === idx);
 	
 		if (!tags.length) {
@@ -16352,7 +16357,7 @@ Ext.define('PVE.tree.ResourceTree', {
 	let duplicateResourceIds = {};
 	let resourceCounts = {};
 	items.forEach(item => {
-	    let id = item?.data?.id;
+	    let id = item && item.data ? item.data.id : undefined;
 	    if (!id) {
 		return;
 	    }
@@ -16388,10 +16393,10 @@ Ext.define('PVE.tree.ResourceTree', {
         store.fireEvent('refresh', store);
 
         // Step 3: Restore expanded folders after refresh
-        rootnode.cascadeBy(node => {
-            if (expandedNodes.has(node.getId())) {
-                node.expand();
-            }
+		rootnode.cascadeBy(node => {
+			if (expandedNodes.has(node.getId())) {
+				node.expand();
+			}
         });
 
         let foundChild = findNode(rootnode, lastsel?.data.id) || null;
@@ -16424,7 +16429,7 @@ Ext.define('PVE.tree.ResourceTree', {
 		});
 
 		updateDebugOverlay({
-		    view: me.viewFilter?.id,
+		    view: me.viewFilter ? me.viewFilter.id : undefined,
 		    resourceCount: items.length,
 		    treeVmCount,
 		    duplicateResourceIds,
@@ -16585,7 +16590,6 @@ Ext.define('PVE.tree.ResourceTree', {
 			node.beginEdit();
 			let info = node.data;
 			me.setIconCls(info);
-			me.setText(info);
 			if (me.viewFilter.groupRenderer) {
 			    info.text = me.viewFilter.groupRenderer(info);
 			}
