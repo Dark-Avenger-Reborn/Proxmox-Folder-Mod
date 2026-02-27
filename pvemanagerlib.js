@@ -16143,6 +16143,65 @@ Ext.define('PVE.tree.ResourceTree', {
             updateCount: 0, // Tracks how many times the tree has been updated.
         };
 
+		let debugOverlay;
+		let ensureDebugOverlay = function() {
+			if (debugOverlay && !debugOverlay.destroyed) {
+				return debugOverlay;
+			}
+
+			if (!Ext.getBody()) {
+				return undefined;
+			}
+
+			debugOverlay = Ext.create('Ext.Component', {
+				floating: true,
+				shadow: false,
+				border: 1,
+				style: {
+					background: 'rgba(24, 24, 24, 0.95)',
+					color: '#f5f5f5',
+					padding: '8px 10px',
+					'font-size': '12px',
+					'line-height': '1.35',
+					'z-index': 100000,
+					'max-width': '460px',
+				},
+				html: 'Folder debug overlay initializing...',
+			});
+
+			debugOverlay.show();
+			debugOverlay.setPagePosition(18, 84);
+			return debugOverlay;
+		};
+
+		let updateDebugOverlay = function(stats) {
+			let overlay = ensureDebugOverlay();
+			if (!overlay) {
+				return;
+			}
+
+			let fmt = function(map) {
+				let keys = Object.keys(map || {});
+				if (!keys.length) {
+					return 'none';
+				}
+				return keys.map(k => `${k}×${map[k]}`).join(', ');
+			};
+
+			let lines = [
+				'<b>Folder Debug Overlay</b>',
+				`view: ${Ext.htmlEncode(stats.view || 'unknown')}`,
+				`resource rows: ${stats.resourceCount}`,
+				`tree VMs: ${stats.treeVmCount}`,
+				`dup resource IDs: ${Ext.htmlEncode(fmt(stats.duplicateResourceIds))}`,
+				`dup tree VMIDs: ${Ext.htmlEncode(fmt(stats.duplicateTreeVmids))}`,
+				`unnamed folders: ${stats.unnamedFolders}`,
+				`update #: ${stats.updateCount}`,
+			];
+
+			overlay.update(lines.join('<br>'));
+		};
+
         // Create the main tree store for rendering the hierarchical structure.
         let store = Ext.create('Ext.data.TreeStore', {
             model: 'PVETree',
@@ -16284,6 +16343,18 @@ Ext.define('PVE.tree.ResourceTree', {
 
         // Step 2: Add new VMs ensuring correct tag hierarchy
         let items = rstore.getData().items.flatMap(me.viewFilter.itemMap ?? Ext.identityFn);
+	let duplicateResourceIds = {};
+	let resourceCounts = {};
+	items.forEach(item => {
+	    let id = item?.data?.id;
+	    if (!id) {
+		return;
+	    }
+	    resourceCounts[id] = (resourceCounts[id] || 0) + 1;
+	    if (resourceCounts[id] > 1) {
+		duplicateResourceIds[id] = resourceCounts[id];
+	    }
+	});
         console.log(`PVE: Step 2 - Processing ${items.length} items from store`);
         items.forEach(item => {
             let olditem = index[item.data.id];
@@ -16318,6 +16389,43 @@ Ext.define('PVE.tree.ResourceTree', {
         });
 
         let foundChild = findNode(rootnode, lastsel?.data.id) || null;
+
+		let duplicateTreeVmids = {};
+		let vmidCounts = {};
+		let unnamedFolders = 0;
+		let treeVmCount = 0;
+		rootnode.cascadeBy(node => {
+		    let data = node.data || {};
+		    if (Ext.isNumeric(data.vmid) && data.vmid > 0) {
+			treeVmCount++;
+			let vmid = String(data.vmid);
+			vmidCounts[vmid] = (vmidCounts[vmid] || 0) + 1;
+			if (vmidCounts[vmid] > 1) {
+			    duplicateTreeVmids[vmid] = vmidCounts[vmid];
+			}
+		    }
+
+		    if (data.groupbyid) {
+			let text = data.text;
+			let plain = '';
+			if (typeof text === 'string') {
+			    plain = text.replace(/<[^>]*>/g, '').trim();
+			}
+			if (!plain.length) {
+			    unnamedFolders++;
+			}
+		    }
+		});
+
+		updateDebugOverlay({
+		    view: me.viewFilter?.id,
+		    resourceCount: items.length,
+		    treeVmCount,
+		    duplicateResourceIds,
+		    duplicateTreeVmids,
+		    unnamedFolders,
+		    updateCount: pdata.updateCount + 1,
+		});
 
         // Step 4: Ensure correct selection after update
         if (lastsel && !foundChild) {
