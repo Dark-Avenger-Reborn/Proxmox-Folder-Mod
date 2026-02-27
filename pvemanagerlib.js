@@ -16050,7 +16050,9 @@ Ext.define('PVE.tree.ResourceTree', {
 	// private
 	groupChild: function(node, info, groups, level) {
 		let me = this;
-		let tags = info.tags ? info.tags.split(';') : [];
+		let tags = info.tags
+			? info.tags.split(';').map(tag => tag.trim()).filter(tag => tag.length > 0)
+			: [];
 	
 		if (!tags.length) {
 			return me.addChildSorted(node, info);
